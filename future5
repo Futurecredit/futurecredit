@@ -210,4 +210,164 @@ contract Lending {
     function getRewards(address _staker) external view returns (uint256) {
         return stakers[_staker].rewardEarned;
     }
+}use solana_program::{account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, pubkey::Pubkey};
+use solana_program::program::{invoke_signed};
+use spl_token::{state::Mint, instruction::{mint_to, burn}};
+use solana_program::sysvar::rent::Rent;
+use solana_program::clock::Clock;
+
+#[cfg(not(feature = "no-entrypoint"))]
+solana_program::entrypoint!(process_instruction);
+
+// Create a mint and initialize it for the lending contract
+pub fn create_mint(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    amount: u64,
+) -> ProgramResult {
+    let mint_account = &accounts[0];
+    let rent = &Rent::from_account_info(&accounts[1])?;
+    
+    // Initialize the mint using SPL Token program
+    let mint_instruction = spl_token::instruction::initialize_mint(
+        &spl_token::ID, 
+        mint_account.key,
+        &accounts[2].key, 
+        None, 
+        9, // Decimal precision (like ERC-20)
+    )?;
+    invoke_signed(&mint_instruction, accounts, &[])?;
+    
+    // Mint tokens to the borrower's account
+    let mint_amount = amount * 10u64.pow(9); // Scaling to 9 decimal places
+    let mint_to_instruction = mint_to(
+        &spl_token::ID, 
+        mint_account.key,
+        &accounts[3].key, 
+        &accounts[2].key, 
+        &[], 
+        mint_amount,
+    )?;
+    invoke_signed(&mint_to_instruction, accounts, &[])?;
+
+    Ok(())
 }
+
+// Repay loan and burn tokens on Solana
+pub fn repay_loan(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    repay_amount: u64,
+) -> ProgramResult {
+    let borrower_account = &accounts[0];
+    let loan_token_account = &accounts[1];
+    
+    // Burn the tokens equivalent to the loan amount
+    let burn_instruction = burn(
+        &spl_token::ID, 
+        loan_token_account.key,
+        &borrower_account.key,
+        &accounts[2].key, 
+        &[], 
+        repay_amount,
+    )?;
+    invoke_signed(&burn_instruction, accounts, &[])?;
+
+    Ok(())
+}
+
+// Main entrypoint for Solana smart contract
+pub fn process_instruction(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    let instruction = instruction_data[0];
+
+    match instruction {
+        1 => create_mint(program_id, accounts, instruction_data[1] as u64), // Create Mint
+        2 => repay_loan(program_id, accounts, instruction_data[1] as u64), // Repay Loan
+        _ => Err(solana_program::program_error::ProgramError::InvalidInstructionData),
+    }
+}
+use solana_program::{account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, pubkey::Pubkey};
+use solana_program::program::{invoke_signed};
+use spl_token::{state::Mint, instruction::{mint_to, burn}};
+use solana_program::sysvar::rent::Rent;
+use solana_program::clock::Clock;
+
+#[cfg(not(feature = "no-entrypoint"))]
+solana_program::entrypoint!(process_instruction);
+
+// Create a mint and initialize it for the lending contract
+pub fn create_mint(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    amount: u64,
+) -> ProgramResult {
+    let mint_account = &accounts[0];
+    let rent = &Rent::from_account_info(&accounts[1])?;
+    
+    // Initialize the mint using SPL Token program
+    let mint_instruction = spl_token::instruction::initialize_mint(
+        &spl_token::ID, 
+        mint_account.key,
+        &accounts[2].key, 
+        None, 
+        9, // Decimal precision (like ERC-20)
+    )?;
+    invoke_signed(&mint_instruction, accounts, &[])?;
+    
+    // Mint tokens to the borrower's account
+    let mint_amount = amount * 10u64.pow(9); // Scaling to 9 decimal places
+    let mint_to_instruction = mint_to(
+        &spl_token::ID, 
+        mint_account.key,
+        &accounts[3].key, 
+        &accounts[2].key, 
+        &[], 
+        mint_amount,
+    )?;
+    invoke_signed(&mint_to_instruction, accounts, &[])?;
+
+    Ok(())
+}
+
+// Repay loan and burn tokens on Solana
+pub fn repay_loan(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    repay_amount: u64,
+) -> ProgramResult {
+    let borrower_account = &accounts[0];
+    let loan_token_account = &accounts[1];
+    
+    // Burn the tokens equivalent to the loan amount
+    let burn_instruction = burn(
+        &spl_token::ID, 
+        loan_token_account.key,
+        &borrower_account.key,
+        &accounts[2].key, 
+        &[], 
+        repay_amount,
+    )?;
+    invoke_signed(&burn_instruction, accounts, &[])?;
+
+    Ok(())
+}
+
+// Main entrypoint for Solana smart contract
+pub fn process_instruction(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    let instruction = instruction_data[0];
+
+    match instruction {
+        1 => create_mint(program_id, accounts, instruction_data[1] as u64), // Create Mint
+        2 => repay_loan(program_id, accounts, instruction_data[1] as u64), // Repay Loan
+        _ => Err(solana_program::program_error::ProgramError::InvalidInstructionData),
+    }
+}
+
