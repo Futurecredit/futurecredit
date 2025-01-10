@@ -1,0 +1,191 @@
+use spl_token::{state::Account, instruction::{mint_to, burn}};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey, program::invoke_signed};
+use solana_program::program_error::ProgramError;
+use solana_program::sysvar::rent::Rent;
+use solana_program::clock::Clock;
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CollateralType {
+    Sol,
+    Usdc,
+    OtherToken,
+}
+
+pub struct Loan {
+    pub amount: u64,
+    pub collateral_amount: u64,
+    pub collateral_type: CollateralType,
+    pub ltv_ratio: u64,  // Loan-to-value ratio
+    pub start_time: u64,
+    pub repayment_deadline: u64,
+    pub is_repaid: bool,
+    pub borrower: Pubkey,
+}
+
+pub struct LendingPlatform {
+    pub loans: Vec<Loan>,
+    pub max_debt_ceiling: u64,
+    pub interest_rate: u64, // Base interest rate
+}
+
+impl LendingPlatform {
+    pub fn create_loan(
+        &mut self,
+        borrower: Pubkey,
+        amount: u64,
+        collateral_amount: u64,
+        collateral_type: CollateralType,
+        current_time: u64,
+    ) -> Result<(), ProgramError> {
+        let ltv_ratio = match collateral_type {
+            CollateralType::Sol => 80,  // 80% LTV for SOL collateral
+            CollateralType::Usdc => 90, // 90% LTV for stablecoins like USDC
+            CollateralType::OtherToken => 70, // 70% LTV for other SPL tokens
+        };
+
+        if collateral_amount * ltv_ratio / 100 < amount {
+            return Err(ProgramError::InsufficientFunds);
+        }
+
+        let loan = Loan {
+            amount,
+            collateral_amount,
+            collateral_type,
+            ltv_ratio,
+            start_time: current_time,
+            repayment_deadline: current_time + 30 * 24 * 3600, // 30 days from now
+            is_repaid: false,
+            borrower,
+        };
+
+        self.loans.push(loan);
+        Ok(())
+    }
+
+    pub fn repay_loan(
+        &mut self,
+        borrower: Pubkey,
+        repayment_amount: u64,
+    ) -> Result<(), ProgramError> {
+        let mut loan_index = None;
+
+        for (index, loan) in self.loans.iter_mut().enumerate() {
+            if loan.borrower == borrower && !loan.is_repaid {
+                loan_index = Some(index);
+                break;
+            }
+        }
+
+        match loan_index {
+            Some(index) => {
+                let loan = &mut self.loans[index];
+                if repayment_amount >= loan.amount {
+                    loan.is_repaid = true;
+                    // Return collateral to borrower
+                    self.return_collateral(borrower, loan.collateral_amount)?;
+                    Ok(())
+                } else {
+                    Err(ProgramError::InsufficientFunds)
+                }
+            }
+            None => Err(ProgramError::InvalidAccountData),
+        }
+    }
+
+    // Function to trigger liquidation if collateral falls below LTV threshold
+    pub fn trigger_liquidation(&mut self, borrower: Pubkey) -> Result<(), ProgramError> {
+        let mut loan_index = None;
+
+        for (index, loan) in self.loans.iter_mut().enumerate() {
+            if loan.borrower == borrower && !loan.is_repaid {
+                loan_index = Some(index);
+                break;
+            }
+        }
+
+        match loan_index {
+            Some(index) => {
+                let loan = &mut self.loans[index];
+                if loan.collateral_amount * loan.ltv_ratio / 100 < loan.amount {
+                    // Liquidate the loan
+                    loan.is_repaid = true; // Mark loan as repaid
+                    self.return_collateral(borrower, loan.collateral_amount / 2)?;
+                    Ok(())
+                } else {
+                    Err(ProgramError::InvalidAccountData)
+                }
+            }
+            None => Err(ProgramError::InvalidAccountData),
+        }
+    }
+
+    fn return_collateral(&self, borrower: Pubkey, collateral_amount: u64) -> Result<(), ProgramError> {
+        // Logic to return collateral back to the borrower
+        Ok(())
+    }
+}
+use std::collections::HashMap;
+
+pub struct ReputationSystem {
+    pub borrower_reputation: HashMap<Pubkey, u64>, // Mapping borrower to their reputation score
+}
+
+impl ReputationSystem {
+    // Increase the reputation score for timely repayments
+    pub fn increase_reputation(&mut self, borrower: Pubkey) {
+        let reputation = self.borrower_reputation.entry(borrower).or_insert(0);
+        *reputation += 10; // Increment reputation by 10
+    }
+
+    // Decrease reputation for loan defaults or late repayments
+    pub fn decrease_reputation(&mut self, borrower: Pubkey) {
+        let reputation = self.borrower_reputation.entry(borrower).or_insert(0);
+        if *reputation >= 10 {
+            *reputation -= 10; // Decrease reputation by 10 for default
+        }
+    }
+
+    // Get reputation score
+    pub fn get_reputation(&self, borrower: Pubkey) -> u64 {
+        *self.borrower_reputation.get(&borrower).unwrap_or(&0)
+    }
+}
+pub struct Governance {
+    pub proposals: HashMap<u64, Proposal>,
+    pub votes: HashMap<u64, HashMap<Pubkey, bool>>, // Maps proposal ID to a list of voters
+}
+
+#[derive(Clone, Debug)]
+pub struct Proposal {
+    pub id: u64,
+    pub description: String,
+    pub vote_count: u64,
+    pub is_approved: bool,
+}
+
+impl Governance {
+    pub fn create_proposal(&mut self, id: u64, description: String) {
+        let proposal = Proposal {
+            id,
+            description,
+            vote_count: 0,
+            is_approved: false,
+        };
+        self.proposals.insert(id, proposal);
+    }
+
+    pub fn vote(&mut self, proposal_id: u64, voter: Pubkey) {
+        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        if !self.votes.contains_key(&proposal_id) {
+            self.votes.insert(proposal_id, HashMap::new());
+        }
+
+        self.votes.get_mut(&proposal_id).unwrap().insert(voter, true);
+        proposal.vote_count += 1;
+
+        // Check if proposal passes threshold for approval (e.g., more than 51% votes)
+        if proposal.vote_count > 10 { // Example threshold of 10 voters
+            proposal.is_approved = true;
+        }
+    }
+}
