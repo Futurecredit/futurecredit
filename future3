@@ -1,0 +1,204 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "./IAIModel.sol";
+
+contract Lending {
+    IAIModel public aiModel;
+    address public owner;
+
+    uint256 public liquidationThreshold = 110; // 110% collateral to loan value threshold for liquidation
+    uint256 public maxDebtCeiling = 1000000 ether; // Maximum total debt limit for the platform
+    uint256 public totalStaked;  // Track total staked tokens for rewards
+
+    // Staking structure for tracking staked amounts and rewards
+    struct Staker {
+        uint256 amountStaked;
+        uint256 lastClaimedTimestamp;
+        uint256 rewardEarned;
+    }
+
+    mapping(address => Staker) public stakers;
+
+    // Loan structure with collateral
+    struct Loan {
+        uint256 amount;
+        uint256 collateralAmount;
+        uint256 interestRate;
+        uint256 startTime;
+        uint256 repaymentDeadline;
+        bool isRepaid;
+    }
+
+    mapping(address => Loan) public loans;
+    mapping(address => uint256) public collateralBalances; // Track collateral balances
+    uint256 public totalLoans; // Track total debt in the system
+
+    // Events
+    event LoanCreated(address indexed borrower, uint256 amount, uint256 collateralAmount, uint256 interestRate);
+    event LoanRepaid(address indexed borrower, uint256 amount, uint256 interestRate);
+    event LoanDefaulted(address indexed borrower, uint256 amount, uint256 interestRate);
+    event CollateralWithdrawn(address indexed borrower, uint256 amount);
+    event CollateralDeposited(address indexed borrower, uint256 amount);
+    event LoanLiquidated(address indexed borrower, uint256 collateralAmount, uint256 loanAmount);
+    event Staked(address indexed staker, uint256 amount);
+    event Unstaked(address indexed staker, uint256 amount);
+    event RewardsClaimed(address indexed staker, uint256 reward);
+
+    constructor(address _aiModel) {
+        aiModel = IAIModel(_aiModel);
+        owner = msg.sender;
+    }
+
+    // Deposit collateral before taking a loan
+    function depositCollateral() external payable {
+        require(msg.value > 0, "Collateral must be greater than zero.");
+        collateralBalances[msg.sender] += msg.value;
+        emit CollateralDeposited(msg.sender, msg.value);
+    }
+
+    // Stake tokens for rewards
+    function stakeTokens(uint256 _amount) external {
+        require(_amount > 0, "Amount to stake must be greater than 0.");
+        collateralBalances[msg.sender] -= _amount; // Deduct from collateral balance
+        stakers[msg.sender].amountStaked += _amount;
+        stakers[msg.sender].lastClaimedTimestamp = block.timestamp;
+        totalStaked += _amount;
+        emit Staked(msg.sender, _amount);
+    }
+
+    // Unstake tokens and withdraw rewards
+    function unstakeTokens(uint256 _amount) external {
+        require(stakers[msg.sender].amountStaked >= _amount, "Insufficient staked amount.");
+        claimRewards();  // Automatically claim rewards before unstaking
+        stakers[msg.sender].amountStaked -= _amount;
+        totalStaked -= _amount;
+        collateralBalances[msg.sender] += _amount;
+        emit Unstaked(msg.sender, _amount);
+    }
+
+    // Claim rewards based on staked tokens
+    function claimRewards() public {
+        Staker storage staker = stakers[msg.sender];
+        uint256 timeElapsed = block.timestamp - staker.lastClaimedTimestamp;
+        uint256 reward = (staker.amountStaked * timeElapsed) / 1 days;  // Example: 1 reward per day per staked token
+
+        staker.rewardEarned += reward;
+        staker.lastClaimedTimestamp = block.timestamp;
+
+        emit RewardsClaimed(msg.sender, reward);
+        collateralBalances[msg.sender] += reward;  // Transfer rewards as collateral (or native token)
+    }
+
+    // Function to create a loan with collateral
+    function createLoan(uint256 _amount, uint256 _collateralAmount) external {
+        require(collateralBalances[msg.sender] >= _collateralAmount, "Insufficient collateral.");
+        require(totalLoans + _amount <= maxDebtCeiling, "Total platform debt ceiling exceeded.");
+
+        // AI-driven interest rate adjustment based on prediction factor
+        uint256 predictionFactor = aiModel.getPrediction(msg.sender);
+        uint256 adjustedInterestRate = calculateInterestRate(predictionFactor); 
+
+        // Set a repayment deadline, for example, 30 days
+        uint256 repaymentDeadline = block.timestamp + 30 days;
+
+        Loan memory newLoan = Loan({
+            amount: _amount,
+            collateralAmount: _collateralAmount,
+            interestRate: adjustedInterestRate,
+            startTime: block.timestamp,
+            repaymentDeadline: repaymentDeadline,
+            isRepaid: false
+        });
+
+        loans[msg.sender] = newLoan;
+        collateralBalances[msg.sender] -= _collateralAmount;
+        totalLoans += _amount;
+
+        emit LoanCreated(msg.sender, _amount, _collateralAmount, adjustedInterestRate);
+    }
+
+    // Calculate dynamic interest rate (based on market predictions)
+    function calculateInterestRate(uint256 predictionFactor) internal pure returns (uint256) {
+        uint256 baseRate = 5;  // 5% base rate
+        uint256 adjustment = predictionFactor % 10;  // Adjust based on prediction factor (could be market sentiment, risk score)
+        return baseRate + adjustment;
+    }
+
+    // Function to repay the loan
+    function repayLoan() external payable {
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.amount > 0, "No active loan to repay.");
+        require(!userLoan.isRepaid, "Loan already repaid.");
+        require(block.timestamp <= userLoan.repaymentDeadline, "Loan repayment period has expired.");
+
+        uint256 repayAmount = userLoan.amount + ((userLoan.amount * userLoan.interestRate) / 100);
+        require(msg.value >= repayAmount, "Insufficient funds to repay loan.");
+
+        // Refund any excess repayment amount
+        if (msg.value > repayAmount) {
+            payable(msg.sender).transfer(msg.value - repayAmount);
+        }
+
+        userLoan.isRepaid = true;
+        totalLoans -= userLoan.amount;
+
+        // Return collateral to the user
+        uint256 collateralRefund = userLoan.collateralAmount;
+        collateralBalances[msg.sender] += collateralRefund;
+
+        emit LoanRepaid(msg.sender, userLoan.amount, userLoan.interestRate);
+    }
+
+    // Function to handle loan defaults (after the repayment deadline)
+    function handleLoanDefault() external {
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.amount > 0, "No active loan.");
+        require(block.timestamp > userLoan.repaymentDeadline, "Loan has not defaulted yet.");
+        require(!userLoan.isRepaid, "Loan has already been repaid.");
+
+        uint256 collateralValue = userLoan.collateralAmount;
+        uint256 loanValue = userLoan.amount + ((userLoan.amount * userLoan.interestRate) / 100);
+        if (loanValue > collateralValue * liquidationThreshold / 100) {
+            liquidateLoan(msg.sender, collateralValue, loanValue);
+        } else {
+            userLoan.isRepaid = true;
+            totalLoans -= userLoan.amount;
+            collateralBalances[msg.sender] += collateralValue;
+            emit LoanDefaulted(msg.sender, userLoan.amount, userLoan.interestRate);
+        }
+    }
+
+    // Function to liquidate the loan (if collateral is insufficient)
+    function liquidateLoan(address _borrower, uint256 collateralAmount, uint256 loanAmount) internal {
+        Loan storage userLoan = loans[_borrower];
+        userLoan.isRepaid = true;
+        totalLoans -= userLoan.amount;
+
+        uint256 liquidationAmount = collateralAmount > loanAmount ? loanAmount : collateralAmount;
+        collateralBalances[owner] += liquidationAmount;
+
+        emit LoanLiquidated(_borrower, liquidationAmount, loanAmount);
+    }
+
+    // View function to get loan details
+    function getLoanDetails(address _borrower) external view returns (uint256 amount, uint256 collateralAmount, uint256 interestRate, uint256 repaymentDeadline, bool isRepaid) {
+        Loan storage userLoan = loans[_borrower];
+        return (userLoan.amount, userLoan.collateralAmount, userLoan.interestRate, userLoan.repaymentDeadline, userLoan.isRepaid);
+    }
+
+    // View function to check collateral balance
+    function getCollateralBalance(address _borrower) external view returns (uint256) {
+        return collateralBalances[_borrower];
+    }
+
+    // View function to check staked balance
+    function getStakedBalance(address _staker) external view returns (uint256) {
+        return stakers[_staker].amountStaked;
+    }
+
+    // View function to check rewards
+    function getRewards(address _staker) external view returns (uint256) {
+        return stakers[_staker].rewardEarned;
+    }
+}
