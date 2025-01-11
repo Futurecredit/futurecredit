@@ -455,6 +455,5 @@ We welcome contributions! Please feel free to fork the repository and submit pul
 
 Make sure to follow the contribution guidelines and write tests for any new features or bug fixes.
 
-License
-This project is licensed under the MIT License - see the LICENSE file for details.
+thanks
 
