@@ -1,0 +1,298 @@
+# Set up Web3 connection (connecting to mainnet or testnet)
+w3 = Web3(Web3.HTTPProvider('https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID'))
+
+# Check connection
+if w3.isConnected():
+    print("Connected to Ethereum Network")
+else:
+    print("Failed to connect to the network")
+
+# Load the smart contract ABI and address
+contract_address = '0xYourContractAddress'
+with open('contract_abi.json') as f:
+    contract_abi = json.load(f)
+
+# Initialize the smart contract
+contract = w3.eth.contract(address=contract_address, abi=contract_abi)
+
+# Get your account address and private key
+account = '0xYourAccountAddress'
+private_key = 'YourPrivateKey'
+
+# Function to execute a trade on the smart contract
+def execute_trade(transaction_details):
+    # Build the transaction
+    transaction = contract.functions.trade(transaction_details).buildTransaction({
+        'from': account,
+        'nonce': w3.eth.getTransactionCount(account),
+        'gas': 2000000,
+        'gasPrice': w3.toWei('10', 'gwei'),
+        'chainId': 1  # Mainnet chainId
+    })
+
+    # Sign the transaction
+    signed_txn = w3.eth.account.signTransaction(transaction, private_key)
+    
+    # Send the transaction
+    tx_hash = w3.eth.sendRawTransaction(signed_txn.rawTransaction)
+    print(f"Transaction sent: {tx_hash.hex()}")
+    return tx_hash
+
+# Example trade: parameters for trade are provided by AI decision function
+if should_trade(predictions, current_price, current_volatility):
+    # Based on predicted price, execute the trade
+    transaction_details = {
+        'amount': 1.0,  # Amount of BTC to trade, assume 1 BTC for simplicity
+        'price': predictions[-1],  # Use predicted price to make the trade
+        'action': 'buy'  # Assume buy action
+    }
+    
+    tx_hash = execute_trade(transaction_details)
+    print(f"Trade executed with transaction hash: {tx_hash.hex()}")
+else:
+    print("No trade action required based on AI analysis.")
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM
+import yfinance as yf
+from web3 import Web3
+import json
+
+# Fetch Bitcoin price data
+data = yf.download('BTC-USD', start="2015-01-01", end="2023-01-01")
+
+# Use closing price for modeling
+data = data[['Close']]
+
+# Normalize the data
+scaler = MinMaxScaler(feature_range=(0, 1))
+data_scaled = scaler.fit_transform(data)
+
+# Create dataset for LSTM
+def create_dataset(data, time_step=60):
+    X, y = [], []
+    for i in range(len(data) - time_step - 1):
+        X.append(data[i:(i + time_step), 0])
+        y.append(data[i + time_step, 0])
+    return np.array(X), np.array(y)
+
+# Prepare training data
+time_step = 60
+X, y = create_dataset(data_scaled, time_step)
+X = X.reshape(X.shape[0], X.shape[1], 1)
+
+# Split data into training and test sets
+train_size = int(len(X) * 0.8)
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# Build the LSTM model
+model = Sequential()
+model.add(LSTM(units=50, return_sequences=True, input_shape=(time_step, 1)))
+model.add(LSTM(units=50, return_sequences=False))
+model.add(Dense(units=1))
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Train the model
+model.fit(X_train, y_train, epochs=10, batch_size=32)
+
+# Make predictions
+predictions = model.predict(X_test)
+predictions = scaler.inverse_transform(predictions)
+
+# Plot the predictions against actual data
+plt.plot(scaler.inverse_transform(y_test.reshape(-1, 1)), color='blue', label='Actual BTC Price')
+plt.plot(predictions, color='red', label='Predicted BTC Price')
+plt.title('BTC Price Prediction')
+plt.xlabel('Time')
+plt.ylabel('BTC Price')
+plt.legend()
+plt.show()
+
+# Risk assessment function - Simple volatility evaluation
+def risk_assessment(data, window_size=30):
+    returns = np.log(data / data.shift(1))
+    volatility = returns.rolling(window=window_size).std() * np.sqrt(window_size)
+    current_volatility = volatility.iloc[-1]
+    print(f"Current Volatility: {current_volatility}")
+    return current_volatility
+
+# Based on market risk, decide whether to trade
+def should_trade(predictions, current_price, volatility, risk_threshold=0.05, price_threshold=0.02):
+    predicted_price = predictions[-1]
+    price_change = abs((predicted_price - current_price) / current_price)
+
+    if volatility > risk_threshold or price_change < price_threshold:
+        print("Market is too volatile or price prediction is not significant, no trade executed.")
+        return False
+    else:
+        print("Market conditions favorable for trade.")
+        return True
+
+# Get current market data
+current_price = data['Close'].iloc[-1]
+current_volatility = risk_assessment(data['Close'])
+
+# Use the predicted price to decide if we should trade
+if should_trade(predictions, current_price, current_volatility):
+    print("Proceed with executing the trade.")
+else:
+    print("AI suggests no trade at this moment.")
+# Main loop: monitor price, update model, check conditions, and execute trades
+def main_loop():
+    # Start WebSocket for real-time data stream
+    start_websocket_thread()
+
+    # Wait for WebSocket data to process trades and predictions
+    while True:
+        pass  # Keep the loop running to allow WebSocket data processing in the background
+# Function to execute trade
+def execute_trade(transaction_details):
+    try:
+        # Build transaction
+        transaction = contract.functions.trade(transaction_details).buildTransaction({
+            'from': account,
+            'nonce': w3.eth.getTransactionCount(account),
+            'gas': 2000000,
+            'gasPrice': w3.toWei('10', 'gwei'),
+            'chainId': 1  # Mainnet chainId
+        })
+        
+        # Sign the transaction
+        signed_txn = w3.eth.account.signTransaction(transaction, private_key)
+        
+        # Send the transaction
+        tx_hash = w3.eth.sendRawTransaction(signed_txn.rawTransaction)
+        print(f"Trade executed: {tx_hash.hex()}")
+        return tx_hash
+    except Exception as e:
+        print(f"Error executing trade: {e}")
+        return None
+
+# Check current account balance
+def check_balance():
+    balance = w3.eth.get_balance(account)  # In Wei
+    print(f"Current account balance: {w3.fromWei(balance, 'ether')} ETH")
+    return balance
+# Maximum Drawdown check
+max_drawdown = 0.2  # 20% max drawdown
+
+# Tracking account balance and peak balance
+account_balance = 1000  # Assume initial balance in USD
+peak_balance = account_balance
+
+# Track the current drawdown percentage
+def check_drawdown():
+    global peak_balance, account_balance
+    if account_balance > peak_balance:
+        peak_balance = account_balance
+    drawdown = (peak_balance - account_balance) / peak_balance
+    if drawdown >= max_drawdown:
+        print("Max drawdown reached, stopping trading.")
+        return False
+    return True
+
+# Dynamic position sizing based on volatility and account balance
+def calculate_position_size(volatility, risk_factor=0.01):
+    global account_balance
+    position_size = account_balance * risk_factor / volatility
+    return position_size
+
+# Example dynamic position sizing in the trading decision
+def should_trade_with_risk(predicted_price, current_price, volatility, max_volatility=0.05):
+    # If volatility is too high, don't trade
+    if volatility > max_volatility:
+        print("Volatility too high, skipping trade.")
+        return False
+    
+    # Calculate position size based on volatility and account balance
+    position_size = calculate_position_size(volatility)
+    
+    # If predicted price movement is significant enough, and drawdown allows for trading, proceed
+    if abs(predicted_price - current_price) / current_price > 0.02 and check_drawdown():
+        print(f"Proceeding with trade. Position size: {position_size}")
+        return True
+    else:
+        print("Conditions not met for trade.")
+        return False
+import numpy as np
+import pandas as pd
+import json
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM
+from web3 import Web3
+import requests
+import websocket
+import threading
+
+# Web3 Connection Setup
+w3 = Web3(Web3.HTTPProvider('https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID'))
+
+if w3.isConnected():
+    print("Connected to Ethereum Network")
+else:
+    print("Failed to connect to the network")
+
+# Initialize contract (ABI and address to be replaced with actual data)
+contract_address = '0xYourContractAddress'
+with open('contract_abi.json') as f:
+    contract_abi = json.load(f)
+
+contract = w3.eth.contract(address=contract_address, abi=contract_abi)
+
+# Account and Private Key for signing transactions
+account = '0xYourAccountAddress'
+private_key = 'YourPrivateKey'
+
+# Function to fetch real-time market data via WebSocket
+def on_message(ws, message):
+    data = json.loads(message)
+    price = float(data['data']['p'])
+    print(f"Real-time price: {price}")
+    # Process this price with AI model and risk management
+    process_real_time_data(price)
+
+def on_error(ws, error):
+    print(f"Error: {error}")
+
+def on_close(ws, close_status_code, close_msg):
+    print("Connection closed")
+
+def on_open(ws):
+    print("Connection established to WebSocket")
+
+def start_real_time_data_stream():
+    url = "wss://stream.binance.com:9443/ws/btcusdt@trade"  # Example: Binance WebSocket for BTC/USDT trade
+    ws = websocket.WebSocketApp(url, on_message=on_message, on_error=on_error, on_close=on_close)
+    ws.on_open = on_open
+    ws.run_forever()
+
+# Function to process real-time data and AI decisions
+def process_real_time_data(price):
+    # Preprocess the new price with your trained AI model
+    current_price = np.array([price]).reshape(1, -1)
+    current_price_scaled = scaler.transform(current_price)
+    
+    # Predict using your trained LSTM model
+    prediction = model.predict(current_price_scaled)
+    predicted_price = scaler.inverse_transform(prediction)
+    print(f"Predicted next price: {predicted_price[0][0]}")
+    
+    # Risk assessment and trading decision
+    current_volatility = risk_assessment(data['Close'])
+    if should_trade(predicted_price, price, current_volatility):
+        print("Executing trade based on real-time data.")
+        execute_trade({'amount': 1.0, 'price': predicted_price[0][0], 'action': 'buy'})
+
+# WebSocket thread to run in background
+def start_websocket_thread():
+    ws_thread = threading.Thread(target=start_real_time_data_stream)
+    ws_thread.daemon = True
+    ws_thread.start()
+
+# Start real-time data stream in the background
+start_websocket_thread()
