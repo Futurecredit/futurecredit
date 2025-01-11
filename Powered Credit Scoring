@@ -1,0 +1,364 @@
+contract AI_RiskManagement {
+    IAIModel public aiModel;
+    
+    struct Loan {
+        uint256 amount;
+        uint256 collateralAmount;
+        uint256 ltvRatio;
+        uint256 predictedRisk;
+        bool isRepaid;
+    }
+    
+    mapping(address => Loan) public loans;
+    
+    uint256 public totalLoans;
+    address public owner;
+
+    event LoanCreated(address indexed borrower, uint256 amount, uint256 ltvRatio, uint256 predictedRisk);
+    event LoanRepaid(address indexed borrower, uint256 amount);
+
+    constructor(address _aiModel) {
+        aiModel = IAIModel(_aiModel);
+        owner = msg.sender;
+    }
+
+    function createLoan(uint256 _amount, uint256 _collateralAmount) external {
+        uint256 creditScore = aiModel.getCreditScore(msg.sender);
+        uint256 predictedRisk = aiModel.getCreditRiskPrediction(msg.sender);
+
+        // Adjust LTV based on AI risk prediction
+        uint256 ltvRatio = _getAdjustedLTV(predictedRisk, creditScore);
+        
+        Loan memory newLoan = Loan({
+            amount: _amount,
+            collateralAmount: _collateralAmount,
+            ltvRatio: ltvRatio,
+            predictedRisk: predictedRisk,
+            isRepaid: false
+        });
+
+        loans[msg.sender] = newLoan;
+        totalLoans += _amount;
+
+        emit LoanCreated(msg.sender, _amount, ltvRatio, predictedRisk);
+    }
+
+    // Adjust LTV based on predicted risk
+    function _getAdjustedLTV(uint256 predictedRisk, uint256 creditScore) private pure returns (uint256) {
+        if (predictedRisk >= 80) {
+            return 50; // High risk, low LTV ratio
+        } else if (creditScore >= 700) {
+            return 80; // Low risk, higher LTV
+        } else {
+            return 65; // Moderate risk, moderate LTV
+        }
+    }
+
+    function repayLoan() external payable {
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.amount > 0, "No active loan to repay.");
+        require(!userLoan.isRepaid, "Loan already repaid.");
+
+        uint256 repayAmount = userLoan.amount + ((userLoan.amount * userLoan.ltvRatio) / 100);
+        require(msg.value >= repayAmount, "Insufficient funds to repay loan.");
+
+        userLoan.isRepaid = true;
+        totalLoans -= userLoan.amount;
+
+        payable(owner).transfer(msg.value);
+        emit LoanRepaid(msg.sender, repayAmount);
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IAIModel {
+    function getCreditScore(address borrower) external view returns (uint256);
+    function getMarketConditions() external view returns (uint256);  // For AI-driven market conditions (volatility, etc.)
+}
+
+contract DynamicAI_LendingPlatform {
+    IAIModel public aiModel;
+    
+    struct Loan {
+        uint256 amount;
+        uint256 interestRate;
+        uint256 creditScore;
+        uint256 startTime;
+        uint256 lastAdjustedTime;
+        bool isRepaid;
+    }
+    
+    mapping(address => Loan) public loans;
+    
+    uint256 public totalLoans;
+    address public owner;
+    
+    event LoanCreated(address indexed borrower, uint256 amount, uint256 interestRate, uint256 creditScore);
+    event LoanRepaid(address indexed borrower, uint256 amount);
+    event LoanAdjusted(address indexed borrower, uint256 newInterestRate);
+
+    constructor(address _aiModel) {
+        aiModel = IAIModel(_aiModel);
+        owner = msg.sender;
+    }
+    
+    // Function to create a loan based on AI credit score
+    function createLoan(uint256 _amount) external {
+        uint256 creditScore = aiModel.getCreditScore(msg.sender);
+        uint256 interestRate = _getInterestRateBasedOnCreditScore(creditScore);
+        
+        Loan memory newLoan = Loan({
+            amount: _amount,
+            interestRate: interestRate,
+            creditScore: creditScore,
+            startTime: block.timestamp,
+            lastAdjustedTime: block.timestamp,
+            isRepaid: false
+        });
+        
+        loans[msg.sender] = newLoan;
+        totalLoans += _amount;
+
+        emit LoanCreated(msg.sender, _amount, interestRate, creditScore);
+    }
+
+    // AI-based interest rate adjustment based on credit score
+    function _getInterestRateBasedOnCreditScore(uint256 creditScore) private pure returns (uint256) {
+        if (creditScore >= 750) {
+            return 3;  // Low risk, lower interest rate
+        } else if (creditScore >= 600) {
+            return 7;  // Medium risk, moderate interest rate
+        } else {
+            return 15; // High risk, high interest rate
+        }
+    }
+    
+    // Dynamic adjustment of loan terms based on AI-driven market conditions or credit score changes
+    function adjustLoanTerms() external {
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.amount > 0, "No active loan.");
+        require(!userLoan.isRepaid, "Loan already repaid.");
+
+        uint256 marketCondition = aiModel.getMarketConditions();  // Market condition factor from AI model
+        uint256 newInterestRate = _getInterestRateBasedOnCreditScore(userLoan.creditScore) + marketCondition;
+
+        // Ensure the interest rate doesn't change too drastically
+        if (newInterestRate != userLoan.interestRate) {
+            userLoan.interestRate = newInterestRate;
+            userLoan.lastAdjustedTime = block.timestamp;
+            emit LoanAdjusted(msg.sender, newInterestRate);
+        }
+    }
+
+    // Repay loan function
+    function repayLoan() external payable {
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.amount > 0, "No active loan to repay.");
+        require(!userLoan.isRepaid, "Loan already repaid.");
+
+        uint256 repayAmount = userLoan.amount + ((userLoan.amount * userLoan.interestRate) / 100);
+        require(msg.value >= repayAmount, "Insufficient funds to repay loan.");
+
+        userLoan.isRepaid = true;
+        totalLoans -= userLoan.amount;
+        payable(owner).transfer(msg.value);
+
+        emit LoanRepaid(msg.sender, repayAmount);
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IAIModel {
+    function getCreditScore(address borrower) external view returns (uint256);
+}
+
+contract CollateralizedAI_LendingPlatform {
+    IAIModel public aiModel;
+    
+    struct Loan {
+        uint256 amount;
+        uint256 interestRate;
+        uint256 creditScore;
+        uint256 collateralAmount;
+        uint256 startTime;
+        uint256 dueTime;
+        bool isRepaid;
+    }
+    
+    mapping(address => Loan) public loans;
+    mapping(address => uint256) public collateralBalance;
+    
+    uint256 public totalLoans;
+    address public owner;
+    
+    event LoanCreated(address indexed borrower, uint256 amount, uint256 interestRate, uint256 creditScore, uint256 collateralAmount);
+    event LoanRepaid(address indexed borrower, uint256 amount);
+    event LoanLiquidated(address indexed borrower, uint256 collateralAmount);
+
+    constructor(address _aiModel) {
+        aiModel = IAIModel(_aiModel);
+        owner = msg.sender;
+    }
+    
+    // Function to create a loan with collateral
+    function createLoan(uint256 _amount, uint256 _collateralAmount) external {
+        uint256 creditScore = aiModel.getCreditScore(msg.sender);
+        uint256 interestRate = _getInterestRateBasedOnCreditScore(creditScore);
+        
+        Loan memory newLoan = Loan({
+            amount: _amount,
+            interestRate: interestRate,
+            creditScore: creditScore,
+            collateralAmount: _collateralAmount,
+            startTime: block.timestamp,
+            dueTime: block.timestamp + 30 days, // Loan due in 30 days
+            isRepaid: false
+        });
+        
+        loans[msg.sender] = newLoan;
+        collateralBalance[msg.sender] = _collateralAmount;
+        totalLoans += _amount;
+
+        emit LoanCreated(msg.sender, _amount, interestRate, creditScore, _collateralAmount);
+    }
+
+    // AI-based interest rate adjustment based on credit score
+    function _getInterestRateBasedOnCreditScore(uint256 creditScore) private pure returns (uint256) {
+        if (creditScore >= 750) {
+            return 3;  // Low risk, lower interest rate
+        } else if (creditScore >= 600) {
+            return 7;  // Medium risk, moderate interest rate
+        } else {
+            return 15; // High risk, high interest rate
+        }
+    }
+    
+    // Repay loan function
+    function repayLoan() external payable {
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.amount > 0, "No active loan to repay.");
+        require(!userLoan.isRepaid, "Loan already repaid.");
+        require(block.timestamp < userLoan.dueTime, "Loan is overdue.");
+
+        uint256 repayAmount = userLoan.amount + ((userLoan.amount * userLoan.interestRate) / 100);
+        require(msg.value >= repayAmount, "Insufficient funds to repay loan.");
+
+        userLoan.isRepaid = true;
+        totalLoans -= userLoan.amount;
+        payable(owner).transfer(msg.value);
+
+        emit LoanRepaid(msg.sender, repayAmount);
+    }
+
+    // Liquidate loan if overdue
+    function liquidateLoan(address borrower) external {
+        Loan storage userLoan = loans[borrower];
+        require(userLoan.amount > 0, "No active loan to liquidate.");
+        require(block.timestamp >= userLoan.dueTime, "Loan is not overdue.");
+        require(!userLoan.isRepaid, "Loan already repaid.");
+
+        uint256 collateralAmount = userLoan.collateralAmount;
+        require(collateralAmount > 0, "No collateral to liquidate.");
+
+        userLoan.isRepaid = true;  // Mark the loan as repaid upon liquidation
+        totalLoans -= userLoan.amount;
+
+        // Transfer collateral to the platform owner or creditor
+        payable(owner).transfer(collateralAmount);
+
+        emit LoanLiquidated(borrower, collateralAmount);
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IAIModel {
+    function getCreditScore(address borrower) external view returns (uint256);
+}
+
+contract IncentiveAI_LendingPlatform {
+    IAIModel public aiModel;
+    
+    struct Loan {
+        uint256 amount;
+        uint256 interestRate;
+        uint256 creditScore;
+        uint256 startTime;
+        uint256 dueTime;
+        bool isRepaid;
+    }
+    
+    mapping(address => Loan) public loans;
+    
+    uint256 public totalLoans;
+    address public owner;
+    
+    event LoanCreated(address indexed borrower, uint256 amount, uint256 interestRate, uint256 creditScore);
+    event LoanRepaid(address indexed borrower, uint256 amount);
+    event RepaymentIncentive(address indexed borrower, uint256 incentiveAmount);
+
+    constructor(address _aiModel) {
+        aiModel = IAIModel(_aiModel);
+        owner = msg.sender;
+    }
+    
+    // Function to create a loan
+    function createLoan(uint256 _amount) external {
+        uint256 creditScore = aiModel.getCreditScore(msg.sender);
+        uint256 interestRate = _getInterestRateBasedOnCreditScore(creditScore);
+        
+        Loan memory newLoan = Loan({
+            amount: _amount,
+            interestRate: interestRate,
+            creditScore: creditScore,
+            startTime: block.timestamp,
+            dueTime: block.timestamp + 30 days, // Loan due in 30 days
+            isRepaid: false
+        });
+        
+        loans[msg.sender] = newLoan;
+        totalLoans += _amount;
+
+        emit LoanCreated(msg.sender, _amount, interestRate, creditScore);
+    }
+
+    // AI-based interest rate adjustment based on credit score
+    function _getInterestRateBasedOnCreditScore(uint256 creditScore) private pure returns (uint256) {
+        if (creditScore >= 750) {
+            return 3;  // Low risk, lower interest rate
+        } else if (creditScore >= 600) {
+            return 7;  // Medium risk, moderate interest rate
+        } else {
+            return 15; // High risk, high interest rate
+        }
+    }
+    
+    // Repay loan with incentives for early repayment
+    function repayLoan() external payable {
+        Loan storage userLoan = loans[msg.sender];
+        require(userLoan.amount > 0, "No active loan to repay.");
+        require(!userLoan.isRepaid, "Loan already repaid.");
+        require(block.timestamp < userLoan.dueTime, "Loan is overdue.");
+
+        uint256 repayAmount = userLoan.amount + ((userLoan.amount * userLoan.interestRate) / 100);
+        require(msg.value >= repayAmount, "Insufficient funds to repay loan.");
+
+        uint256 incentiveAmount = 0;
+        if (block.timestamp <= userLoan.startTime + 7 days) { // Repay within 7 days
+            incentiveAmount = (repayAmount * 5) / 100; // 5% discount for early repayment
+        }
+
+        userLoan.isRepaid = true;
+        totalLoans -= userLoan.amount;
+        payable(owner).transfer(msg.value - incentiveAmount);  // Transfer the repay amount minus incentive
+
+        if (incentiveAmount > 0) {
+            payable(msg.sender).transfer(incentiveAmount);  // Return incentive to borrower
+            emit RepaymentIncentive(msg.sender, incentiveAmount);
+        }
+
+        emit LoanRepaid(msg.sender, repayAmount);
+    }
+}
