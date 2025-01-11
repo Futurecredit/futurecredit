@@ -458,6 +458,3 @@ Make sure to follow the contribution guidelines and write tests for any new feat
 License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-Acknowledgments
-Ethereum Community: For the creation of the Ethereum ecosystem that enables decentralized applications.
-AI Researchers: For building and improving machine learning algorithms that can be integrated into DeFi.
