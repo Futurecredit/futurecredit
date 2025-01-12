@@ -67,14 +67,14 @@
 
 AI and Decentralized Finance (DeFi) Integration
 Overview
-This repository demonstrates how to combine Artificial Intelligence (AI) and Decentralized Finance (DeFi) to create an intelligent trading bot on the Ethereum blockchain. The bot leverages AI-powered predictions to make informed trading decisions, dynamically adjusts position sizes based on volatility, and interacts with DeFi protocols to execute trades securely.
+This repository demonstrates how to combine Artificial Intelligence (AI) and Decentralized Finance (DeFi) to create an intelligent trading bot on the Solana blockchain. The bot leverages AI-powered predictions to make informed trading decisions, dynamically adjusts position sizes based on volatility, and interacts with DeFi protocols to execute trades securely.
 
 Key features:
 
 AI-Powered Price Predictions: Uses a trained LSTM (Long Short-Term Memory) model to predict future market prices.
 Real-Time Market Data: Fetches live data using WebSockets (e.g., Binance) to ensure the system reacts to market changes in real-time.
 Risk Management: Implements dynamic position sizing based on volatility, and a trailing stop loss strategy to lock profits.
-Smart Contract Interaction: Executes trades using Ethereum-based smart contracts deployed on the Ethereum network.
+Smart Contract Interaction: Executes trades using Solana-based smart contracts deployed on the Solana network.
 Features
 1. Real-Time Data Handling
 Fetches live market prices (e.g., BTC/USDT) via WebSocket connections from Binance.
@@ -88,14 +88,14 @@ Implements advanced risk management strategies like trailing stop loss and profi
 Position sizes dynamically adjust based on volatility.
 Max drawdown control to avoid large losses.
 4. Smart Contract Integration
-Interacts with Ethereum smart contracts for executing buy/sell transactions.
-Uses Web3.py to build, sign, and send transactions to the Ethereum network.
+Interacts with Solana smart contracts for executing buy/sell transactions.
+Uses Web3.py to build, sign, and send transactions to the Solana network.
 Executes trades with specific conditions based on AI predictions and risk management.
 Installation
 Prerequisites
 Python 3.7 or later
-Ethereum wallet and private key (for interacting with DeFi protocols)
-Infura or Alchemy account (to connect to the Ethereum network)
+Solana wallet and private key (for interacting with DeFi protocols)
+Infura or Alchemy account (to connect to the Solana network)
 WebSocket-enabled exchange API (e.g., Binance)
 DeFi smart contract ABI and address
 Required Libraries
@@ -107,8 +107,8 @@ pip install web3 tensorflow numpy pandas scikit-learn websocket-client requests
 Configuration
 Web3 Setup:
 
-Obtain your Infura/Alchemy API key to connect to the Ethereum network.
-Update the following code in config.py with your Ethereum details:
+Obtain your Infura/Alchemy API key to connect to the Solana network.
+Update the following code in config.py with your Solana details:
 python
 复制代码
 INFURA_PROJECT_ID = "YOUR_INFURA_PROJECT_ID"
@@ -157,7 +157,7 @@ def update_trailing_stop(current_price, entry_price):
         stop_loss_price = current_price * (1 - trail_percentage)
         return stop_loss_price
 4. Smart Contract Interaction:
-The bot interacts with Ethereum-based smart contracts to execute trades. It signs transactions and sends them to the Ethereum network using Web3.py.
+The bot interacts with Solana-based smart contracts to execute trades. It signs transactions and sends them to the Solana network using Web3.py.
 
 python
 复制代码
@@ -177,7 +177,7 @@ The bot connects to the WebSocket feed for BTC/USDT prices.
 It streams real-time price updates and feeds them to the LSTM model.
 The model predicts future price movements.
 The bot calculates the risk (e.g., volatility, trailing stop loss).
-If conditions are met (e.g., predicted price movement and risk assessment), the bot sends a buy/sell order via an Ethereum smart contract.
+If conditions are met (e.g., predicted price movement and risk assessment), the bot sends a buy/sell order via an Solana smart contract.
 Running the Bot
 Once the bot is set up and configured, you can start the trading loop. The bot will continuously fetch data, make predictions, and execute trades according to your defined risk parameters.
 
