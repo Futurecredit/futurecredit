@@ -44,7 +44,6 @@ Example Data: AI model predictions, market volatility, credit scores, collateral
 Example Solidity Smart Contracts
 1. Lending Contract (AI-Driven Loan Terms)
 solidity
-复制代码
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -110,7 +109,6 @@ contract Lending {
 }
 2. Staking Contract (AI-Driven Rewards)
 solidity
-复制代码
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -253,7 +251,6 @@ Example Solidity Smart Contracts
 This contract dynamically adjusts loan terms and interest rates based on an AI-driven credit score and market conditions.
 
 solidity
-复制代码
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -321,7 +318,6 @@ contract Lending {
 This contract adjusts staking rewards dynamically based on the AI model's prediction of market conditions.
 
 solidity
-复制代码
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -390,18 +386,15 @@ Ganache: Use Ganache for local Ethereum blockchain testing or deploy to a public
 Steps to Deploy
 Install dependencies:
 bash
-复制代码
 npm install
 Compile contracts:
 If using Truffle:
 
 bash
-复制代码
 truffle compile
 If using Hardhat:
 
 bash
-复制代码
 npx hardhat compile
 Deploy to a testnet: Update the deployment scripts to use the correct contract address for the AI model and oracle network. Deploy using Truffle or Hardhat.
 
@@ -416,7 +409,6 @@ Staking: Test if staking rewards are calculated and distributed based on AI-driv
 Example:
 
 javascript
-复制代码
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
