@@ -102,7 +102,7 @@ Required Libraries
 You need to install the following libraries:
 
 bash
-复制代码
+ 
 pip install web3 tensorflow numpy pandas scikit-learn websocket-client requests
 Configuration
 Web3 Setup:
@@ -110,7 +110,7 @@ Web3 Setup:
 Obtain your Infura/Alchemy API key to connect to the Solana network.
 Update the following code in config.py with your Solana details:
 python
-复制代码
+ 
 INFURA_PROJECT_ID = "YOUR_INFURA_PROJECT_ID"
 CONTRACT_ADDRESS = "0xYourContractAddress"
 PRIVATE_KEY = "YourPrivateKey"
@@ -128,7 +128,7 @@ How It Works
 The system connects to the WebSocket API (e.g., Binance) to get real-time market prices (BTC/USDT, ETH/USDT, etc.) and continuously feeds the price data to the AI model.
 
 python
-复制代码
+ 
 def start_real_time_data_stream():
     url = "wss://stream.binance.com:9443/ws/btcusdt@trade"
     ws = websocket.WebSocketApp(url, on_message=on_message, on_error=on_error, on_close=on_close)
@@ -138,7 +138,7 @@ def start_real_time_data_stream():
 The real-time price data is transformed and passed to a pre-trained LSTM model for price prediction. The model predicts the next price point for a given asset.
 
 python
-复制代码
+ 
 def process_real_time_data(price):
     current_price = np.array([price]).reshape(1, -1)
     current_price_scaled = scaler.transform(current_price)
@@ -150,7 +150,7 @@ def process_real_time_data(price):
 The bot dynamically adjusts position size based on volatility and includes a trailing stop loss that moves with the price to lock profits.
 
 python
-复制代码
+ 
 def update_trailing_stop(current_price, entry_price):
     # Adjust trailing stop as price moves up
     if current_price > entry_price:
@@ -160,7 +160,7 @@ def update_trailing_stop(current_price, entry_price):
 The bot interacts with Solana-based smart contracts to execute trades. It signs transactions and sends them to the Solana network using Web3.py.
 
 python
-复制代码
+ 
 def execute_trade(transaction_details):
     transaction = contract.functions.trade(transaction_details['amount'], transaction_details['price'], transaction_details['action']).buildTransaction({
         'from': account,
@@ -182,7 +182,7 @@ Running the Bot
 Once the bot is set up and configured, you can start the trading loop. The bot will continuously fetch data, make predictions, and execute trades according to your defined risk parameters.
 
 python
-复制代码
+ 
 def main_loop():
     start_websocket_thread()
     while True:
